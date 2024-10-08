@@ -1,57 +1,60 @@
 //
-//  Persistence.swift
+//  PersistenceController.swift
 //  ToDoApp
 //
 //  Created by Anvar on 30/09/24.
 //
 
+import Combine
 import CoreData
 
-struct PersistenceController {
+class PersistenceController {
     static let shared = PersistenceController()
 
-    @MainActor
-    static let preview: PersistenceController = {
+    let container: NSPersistentContainer
+    let errorHandler = ErrorHandler()
+
+    // Preview instance for SwiftUI previews
+    static var preview: PersistenceController = {
         let result = PersistenceController(inMemory: true)
         let viewContext = result.container.viewContext
+
+        // Create sample data
         for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
+            let newItem = ToDoItem(context: viewContext)
+            newItem.id = UUID()
+            newItem.title = "Sample Task"
+            newItem.details = "This is a sample task."
+            newItem.dueDate = Date()
+            newItem.priority = 1
+            newItem.isCompleted = false
         }
         do {
             try viewContext.save()
         } catch {
-            // Replace this implementation with code to handle the error appropriately.
-            // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-            let nsError = error as NSError
-            fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+            // Handle the error appropriately
+            // Since this is a preview, you might choose to ignore the error
         }
         return result
     }()
 
-    let container: NSPersistentContainer
-
     init(inMemory: Bool = false) {
         container = NSPersistentContainer(name: "ToDoApp")
         if inMemory {
-            container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
+            container.persistentStoreDescriptions.first?.url = URL(
+                fileURLWithPath: "/dev/null")
         }
-        container.loadPersistentStores(completionHandler: { (storeDescription, error) in
+        container.loadPersistentStores { [weak self] (_, error) in
             if let error = error as NSError? {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-
-                /*
-                 Typical reasons for an error here include:
-                 * The parent directory does not exist, cannot be created, or disallows writing.
-                 * The persistent store is not accessible, due to permissions or data protection when the device is locked.
-                 * The device is out of space.
-                 * The store could not be migrated to the current model version.
-                 Check the error message to determine what the actual problem was.
-                 */
-                fatalError("Unresolved error \(error), \(error.userInfo)")
+                // Handle the error by setting the alertMessage in errorHandler
+                DispatchQueue.main.async {
+                    self?.errorHandler.alertMessage =
+                        "An error occurred while loading the app data."
+                }
+                // Removed print statements for production release
             }
-        })
+        }
+        // Merge changes from other contexts automatically
         container.viewContext.automaticallyMergesChangesFromParent = true
     }
 }
